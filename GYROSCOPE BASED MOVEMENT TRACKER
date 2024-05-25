@@ -1,0 +1,106 @@
+#include <Wire.h>
+#define Period 1000
+#define ISR
+float RateRoll;
+float AccX, AccY, AccZ;
+float AngleRoll;
+float ArcLength, TotalLength;
+float AreaSwept;
+float Force, Work;
+float Displacement;
+float ArmLength=0.27;//standard arm length in metre
+float mass=5.0;//Set weight according to your Dumbbell
+float AccZInertial;
+float Velocity;
+float LoopTimer;
+
+byte digitalPinPulse = 2;
+byte pulsecount;
+
+void Arc(){
+  TotalLength=3.14*ArmLength;
+  ArcLength=(AngleRoll/180)*TotalLength;
+  AreaSwept=(AngleRoll/180)*((3.14*ArmLength*ArmLength)/2);
+  Force=mass*AccZ;
+  Displacement=2*ArmLength*cos(AngleRoll);
+  Work=Force*Displacement;
+}
+
+
+
+
+void counterISR()
+{
+    AngleRoll++;
+}
+
+void gyro_signals(void) {
+  Wire.beginTransmission(0x68);
+  Wire.write(0x1A);
+  Wire.write(0x05);
+  Wire.endTransmission();
+  Wire.beginTransmission(0x68);
+  Wire.write(0x1C);
+  Wire.write(0x10);
+  Wire.endTransmission();
+  Wire.beginTransmission(0x68);
+  Wire.write(0x3B);
+  Wire.endTransmission(); 
+  Wire.requestFrom(0x68,6);
+  int16_t AccXLSB = Wire.read() << 8 | Wire.read();
+  int16_t AccYLSB = Wire.read() << 8 | Wire.read();
+  int16_t AccZLSB = Wire.read() << 8 | Wire.read();
+  Wire.beginTransmission(0x68);
+  Wire.write(0x1B); 
+  Wire.write(0x8);
+  Wire.endTransmission();                                                   
+  Wire.beginTransmission(0x68);
+  Wire.write(0x43);
+  Wire.endTransmission();
+  Wire.requestFrom(0x68,6);
+  int16_t GyroX=Wire.read()<<8 | Wire.read();
+  int16_t GyroY=Wire.read()<<8 | Wire.read();
+  int16_t GyroZ=Wire.read()<<8 | Wire.read();
+  RateRoll=(float)GyroX/65.5;
+  AccX=(float)AccXLSB/4096-0.01;
+  AccY=(float)AccYLSB/4096-0.01;
+  AccZ=(float)AccZLSB/4096-0.02;
+  AngleRoll=atan(AccY/sqrt(AccX*AccX+AccZ*AccZ))*1/(3.142/180);
+}
+void setup() {
+  Serial.begin(115200);
+  pinMode(4, OUTPUT);
+  digitalWrite(13, HIGH);
+  Wire.setClock(400000);
+  Wire.begin();
+  delay(250);
+  Wire.beginTransmission(0x68);
+  pinMode (2, INPUT);
+  attachInterrupt(digitalPinToInterrupt(2),counterISR, RISING); 
+  Wire.write(0x6B);
+  Wire.write(0x00);
+  Wire.endTransmission();}
+  
+void loop() {
+  gyro_signals();
+  Arc();
+  if(AngleRoll>0.5){
+    pulsecount+=Period;
+
+  }
+
+  Serial.print("Roll Angle[degree]= ");
+  Serial.print(AngleRoll);
+  Serial.print( "Counter=");
+  Serial.print(pulsecount);
+  Serial.print("Arc Length[metre]= ");
+  Serial.print(ArcLength);
+  Serial.print("Area Swept[m2]= ");
+  Serial.print(AreaSwept);
+  Serial.print("Work[Joule]= ");
+  Serial.print(Work);
+
+  Serial.print('\n');
+  
+  delay(500);
+}
